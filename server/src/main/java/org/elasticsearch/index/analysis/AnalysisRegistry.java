@@ -106,6 +106,7 @@ public final class AnalysisRegistry implements Closeable {
             .settings(Settings.builder().put(IndexMetadata.SETTING_VERSION_CREATED, Version.CURRENT))
             .numberOfReplicas(0)
             .numberOfShards(1)
+            .translogWriting(true)
             .build(),
         Settings.EMPTY
     );

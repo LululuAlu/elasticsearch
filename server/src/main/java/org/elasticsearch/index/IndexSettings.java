@@ -1126,4 +1126,12 @@ public final class IndexSettings {
     private void setMappingFieldNameLengthLimit(long value) {
         this.mappingFieldNameLengthLimit = value;
     }
+
+    /**
+     * Returns false if index translog turn off using the
+     * {@link IndexMetadata#SETTING_TRANSLOG_WRITING}
+     */
+    public boolean isTranslogWriting() {
+        return indexMetadata.getSettings().getAsBoolean(IndexMetadata.SETTING_TRANSLOG_WRITING, true);
+    }
 }
