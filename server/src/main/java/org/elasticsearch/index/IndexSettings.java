@@ -963,4 +963,11 @@ public final class IndexSettings {
     private void setSearchThrottled(boolean searchThrottled) {
         this.searchThrottled = searchThrottled;
     }
+
+    /**
+     * Returns false if index translog turn off using the
+     */
+    public boolean isTranslogWriting() {
+        return indexMetaData.getSettings().getAsBoolean(IndexMetaData.SETTING_TRANSLOG_WRITING, true);
+    }
 }

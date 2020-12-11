@@ -404,10 +404,14 @@ final class StoreRecovery {
             if (recoveryState.getRecoverySource().getType() == RecoverySource.Type.LOCAL_SHARDS) {
                 assert indexShouldExists;
                 store.bootstrapNewHistory();
+                // 获取最后一个segment
                 final SegmentInfos segmentInfos = store.readLastCommittedSegmentsInfo();
+                // 获取checkpoint id
                 final long localCheckpoint = Long.parseLong(segmentInfos.userData.get(SequenceNumbers.LOCAL_CHECKPOINT_KEY));
+                // 创建一个新的translog
                 final String translogUUID = Translog.createEmptyTranslog(
                     indexShard.shardPath().resolveTranslog(), localCheckpoint, shardId, indexShard.getPendingPrimaryTerm());
+                // 将store中描述的 translog 刷写入lucene索引，并返回一个空的 translog
                 store.associateIndexWithNewTranslog(translogUUID);
                 writeEmptyRetentionLeasesFile(indexShard);
             } else if (indexShouldExists) {

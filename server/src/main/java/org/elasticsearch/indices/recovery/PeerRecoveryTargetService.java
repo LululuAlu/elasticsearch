@@ -183,6 +183,7 @@ public class PeerRecoveryTargetService implements IndexEventListener {
                 assert recoveryTarget.sourceNode() != null : "can not do a recovery without a source node";
                 request = getStartRecoveryRequest(recoveryTarget);
                 logger.trace("{} preparing shard for peer recovery", recoveryTarget.shardId());
+                // 标记当前shard正在开始恢复
                 recoveryTarget.indexShard().prepareForIndexRecovery();
             } catch (final Exception e) {
                 // this will be logged as warning later on...

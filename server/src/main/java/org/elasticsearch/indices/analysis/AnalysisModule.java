@@ -64,7 +64,8 @@ import static org.elasticsearch.plugins.AnalysisPlugin.requiresAnalysisSettings;
 public final class AnalysisModule {
     static {
         Settings build = Settings.builder().put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).put(IndexMetaData
-            .SETTING_NUMBER_OF_REPLICAS, 1).put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, 1).build();
+            .SETTING_NUMBER_OF_REPLICAS, 1).put(IndexMetaData.SETTING_NUMBER_OF_SHARDS, 1)
+            .put(IndexMetaData.SETTING_TRANSLOG_WRITING, true).build();
         IndexMetaData metaData = IndexMetaData.builder("_na_").settings(build).build();
         NA_INDEX_SETTINGS = new IndexSettings(metaData, Settings.EMPTY);
     }

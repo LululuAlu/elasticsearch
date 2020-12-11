@@ -929,7 +929,11 @@ public class InternalEngine extends Engine {
                 if (index.origin().isFromTranslog() == false) {
                     final Translog.Location location;
                     if (indexResult.getResultType() == Result.Type.SUCCESS) {
-                        location = translog.add(new Translog.Index(index, indexResult));
+                        if (engineConfig.getIndexSettings().isTranslogWriting()) {
+                            location = translog.add(new Translog.Index(index, indexResult));
+                        } else {
+                            location = null;
+                        }
                     } else if (indexResult.getSeqNo() != SequenceNumbers.UNASSIGNED_SEQ_NO) {
                         // if we have document failure, record it as a no-op in the translog and Lucene with the generated seq_no
                         final NoOp noOp = new NoOp(indexResult.getSeqNo(), index.primaryTerm(), index.origin(),
@@ -1309,7 +1313,11 @@ public class InternalEngine extends Engine {
             if (delete.origin().isFromTranslog() == false) {
                 final Translog.Location location;
                 if (deleteResult.getResultType() == Result.Type.SUCCESS) {
-                    location = translog.add(new Translog.Delete(delete, deleteResult));
+                    if (engineConfig.getIndexSettings().isTranslogWriting()) {
+                        location = translog.add(new Translog.Delete(delete, deleteResult));
+                    } else {
+                        location = null;
+                    }
                 } else if (deleteResult.getSeqNo() != SequenceNumbers.UNASSIGNED_SEQ_NO) {
                     // if we have document failure, record it as a no-op in the translog and Lucene with the generated seq_no
                     final NoOp noOp = new NoOp(deleteResult.getSeqNo(), delete.primaryTerm(), delete.origin(),
