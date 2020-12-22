@@ -254,6 +254,8 @@ public class PeerRecoveryTargetService implements IndexEventListener {
         };
 
         try {
+            System.out.println(String.format("shard send recoverRequest shardId:%s, recoverId:%d, targetAllocationId:%s",
+                request.shardId(), request.recoveryId(), request.targetAllocationId()));
             logger.trace("{} starting recovery from {}", request.shardId(), request.sourceNode());
             cancellableThreads.executeIO(() ->
                 // we still execute under cancelableThreads here to ensure we interrupt any blocking call to the network if any
@@ -380,10 +382,10 @@ public class PeerRecoveryTargetService implements IndexEventListener {
 
     /**
      * Get the starting sequence number for a sequence-number-based request.
-     *
      * @param recoveryTarget the target of the recovery
      * @return the starting sequence number or {@link SequenceNumbers#UNASSIGNED_SEQ_NO} if obtaining the starting sequence number
      * failed
+     * localheckpoint + 1 表示接下来开始的 sequence num编号
      */
     public static long getStartingSeqNo(final Logger logger, final RecoveryTarget recoveryTarget) {
         try {
@@ -428,6 +430,9 @@ public class PeerRecoveryTargetService implements IndexEventListener {
         void onRecoveryFailure(RecoveryState state, RecoveryFailedException e, boolean sendShardFailure);
     }
 
+    /**
+     * 用在副本恢复时 进行translog 回放操作，
+     */
     class PrepareForTranslogOperationsRequestHandler implements TransportRequestHandler<RecoveryPrepareForTranslogOperationsRequest> {
 
         @Override
@@ -519,6 +524,7 @@ public class PeerRecoveryTargetService implements IndexEventListener {
                 recoveryTarget.indexTranslogOperations(
                         request.operations(),
                         request.totalTranslogOps(),
+                        request.globalCheckpoint(),
                         request.maxSeenAutoIdTimestampOnPrimary(),
                         request.maxSeqNoOfUpdatesOrDeletesOnPrimary(),
                         request.retentionLeases(),

@@ -84,6 +84,7 @@ import org.elasticsearch.index.engine.Engine;
 import org.elasticsearch.index.engine.EngineConfig;
 import org.elasticsearch.index.engine.EngineException;
 import org.elasticsearch.index.engine.EngineFactory;
+import org.elasticsearch.index.engine.InternalEngine;
 import org.elasticsearch.index.engine.ReadOnlyEngine;
 import org.elasticsearch.index.engine.RefreshFailedEngineException;
 import org.elasticsearch.index.engine.Segment;
@@ -2139,6 +2140,14 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     }
 
     /**
+     * 为了在没有translog的情况下 使副本节点的localCheckpoint 保持和globalCheckpoint同步
+     * @userAdd
+     * @param globalCheckpoint 从 primary shard 获取
+     */
+    public void markNoTranslogSync(long globalCheckpoint) {
+        getEngine().markSeqNoAsCompleted(globalCheckpoint);
+    }
+    /**
      * Returns the local checkpoint for the shard.
      *
      * @return the local checkpoint
@@ -2400,6 +2409,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
             case PEER:
                 // 副本分片从远程主分片恢复
                 try {
+                    //标记shard 进入恢复状态
                     markAsRecovering("from " + recoveryState.getSourceNode(), recoveryState);
                     recoveryTargetService.startRecovery(this, recoveryState.getSourceNode(), recoveryListener);
                 } catch (Exception e) {

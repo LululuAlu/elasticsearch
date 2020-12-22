@@ -117,6 +117,7 @@ public class RemoteRecoveryTargetHandler implements RecoveryTargetHandler {
     public void indexTranslogOperations(
             final List<Translog.Operation> operations,
             final int totalTranslogOps,
+            long globalCheckpoint,
             final long maxSeenAutoIdTimestampOnPrimary,
             final long maxSeqNoOfDeletesOrUpdatesOnPrimary,
             final RetentionLeases retentionLeases,
@@ -124,6 +125,7 @@ public class RemoteRecoveryTargetHandler implements RecoveryTargetHandler {
         final RecoveryTranslogOperationsRequest request = new RecoveryTranslogOperationsRequest(
                 recoveryId,
                 shardId,
+                globalCheckpoint,
                 operations,
                 totalTranslogOps,
                 maxSeenAutoIdTimestampOnPrimary,

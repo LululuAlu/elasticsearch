@@ -120,7 +120,9 @@ public class SequenceNumbers {
     }
 
     public static final class CommitInfo {
+        // 最大提交次数，目前未知。可能表示接收到的全局提交次数[?]
         public final long maxSeqNo;
+        // 本地checkpoint 提交次数
         public final long localCheckpoint;
 
         public CommitInfo(long maxSeqNo, long localCheckpoint) {

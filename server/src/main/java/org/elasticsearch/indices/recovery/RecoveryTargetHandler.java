@@ -62,9 +62,12 @@ public interface RecoveryTargetHandler {
 
     /**
      * Index a set of translog operations on the target
+     * 执行副本通过translog 恢复
      *
      * @param operations                          operations to index
      * @param totalTranslogOps                    current number of total operations expected to be indexed
+     * @param globalCheckpoint                    为了让不写translog 的副本能跟上主分片的globalcheckpoint，传过去同步。只会发生在数据写入是索引自动创建
+     *                                            或者重启时候分片恢复
      * @param maxSeenAutoIdTimestampOnPrimary     the maximum auto_id_timestamp of all append-only requests processed by the primary shard
      * @param maxSeqNoOfUpdatesOrDeletesOnPrimary the max seq_no of update operations (index operations overwrite Lucene) or delete ops on
      *                                            the primary shard when capturing these operations. This value is at least as high as the
@@ -76,6 +79,7 @@ public interface RecoveryTargetHandler {
     void indexTranslogOperations(
             List<Translog.Operation> operations,
             int totalTranslogOps,
+            long globalCheckpoint,
             long maxSeenAutoIdTimestampOnPrimary,
             long maxSeqNoOfUpdatesOrDeletesOnPrimary,
             RetentionLeases retentionLeases,

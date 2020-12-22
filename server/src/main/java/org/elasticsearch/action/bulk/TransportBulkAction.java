@@ -229,13 +229,14 @@ public class TransportBulkAction extends HandledTransportAction<BulkRequest, Bul
             final Set<String> indices = bulkRequest.requests.stream()
                     // delete requests should not attempt to create the index (if the index does not
                     // exists), unless an external versioning is used
-                .filter(request -> request.opType() != DocWriteRequest.OpType.DELETE 
-                        || request.versionType() == VersionType.EXTERNAL 
+                .filter(request -> request.opType() != DocWriteRequest.OpType.DELETE
+                        || request.versionType() == VersionType.EXTERNAL
                         || request.versionType() == VersionType.EXTERNAL_GTE)
                 .map(DocWriteRequest::index)
                 .collect(Collectors.toSet());
             /* Step 2: filter that to indices that don't exist and we can create. At the same time build a map of indices we can't create
              * that we'll use when we try to run the requests. */
+            // 检查index 是否存在，
             final Map<String, IndexNotFoundException> indicesThatCannotBeCreated = new HashMap<>();
             Set<String> autoCreateIndices = new HashSet<>();
             ClusterState state = clusterService.state();

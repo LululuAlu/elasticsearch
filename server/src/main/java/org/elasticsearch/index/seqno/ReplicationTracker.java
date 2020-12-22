@@ -859,7 +859,7 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
     /**
      * Marks the shard with the provided allocation ID as in-sync with the primary shard. This method will block until the local checkpoint
      * on the specified shard advances above the current global checkpoint.
-     *
+     * 标记给定的 allocationId 对应的分片和 主分片同步
      * @param allocationId    the allocation ID of the shard to mark as in-sync
      * @param localCheckpoint the current local checkpoint on the shard
      */
@@ -882,11 +882,14 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
         assert !cps.inSync || (cps.localCheckpoint >= getGlobalCheckpoint()) :
             "shard copy " + allocationId + " that's already in-sync should have a local checkpoint " + cps.localCheckpoint +
                 " that's above the global checkpoint " + getGlobalCheckpoint();
+        System.out.println(String.format("allocationId %s, localCheckpoint %d, globalCheckpoint %d", allocationId, cps.localCheckpoint, getGlobalCheckpoint()));
+        // 目标shard 的localCheckpoint 没有和 globalCheckpoint一致，当前线程进入等待 分片跟上全局进度。由 updateLocalCheckpoint 来通知
         if (cps.localCheckpoint < getGlobalCheckpoint()) {
             pendingInSync.add(allocationId);
             try {
                 while (true) {
                     if (pendingInSync.contains(allocationId)) {
+                        System.out.println("markAllocationIdAsInSync access allocationId:" + allocationId);
                         waitForLocalCheckpointToAdvance();
                     } else {
                         break;
@@ -925,9 +928,10 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
     }
 
     /**
+     *
      * Notifies the service to update the local checkpoint for the shard with the provided allocation ID. If the checkpoint is lower than
      * the currently known one, this is a no-op. If the allocation ID is not tracked, it is ignored.
-     *
+     * 根据 allocation ID 更新 local checkpoint, 按道理会收到 shard * 2 次
      * @param allocationId    the allocation ID of the shard to update the local checkpoint for
      * @param localCheckpoint the local checkpoint for the shard
      */
@@ -942,7 +946,11 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
         }
         boolean increasedLocalCheckpoint = updateLocalCheckpoint(allocationId, cps, localCheckpoint);
         boolean pending = pendingInSync.contains(allocationId);
+        System.out.println(String.format("updateLocalCheckpoint access allocationId:%s localCheckpoint:%d",allocationId, localCheckpoint));
+        // 判断是否有同步等待 sync 响应的线程。如果有就唤醒
+        // 只有当 target[副本]的localCheckpoint 和当前的不一致才会进入等待
         if (pending && cps.localCheckpoint >= getGlobalCheckpoint()) {
+            System.out.println("notify :" + allocationId);
             pendingInSync.remove(allocationId);
             pending = false;
             cps.inSync = true;
@@ -1064,7 +1072,7 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
     /**
      * Activates the global checkpoint tracker in primary mode (see {@link #primaryMode}. Called on primary relocation target during
      * primary relocation handoff.
-     *
+     * 在primary mode下激活global checkpoint tracker(参见{@link #primaryMode})。在主重新定位切换期间调用主重新定位目标。
      * @param primaryContext the primary context used to initialize the state
      */
     public synchronized void activateWithPrimaryContext(PrimaryContext primaryContext) {

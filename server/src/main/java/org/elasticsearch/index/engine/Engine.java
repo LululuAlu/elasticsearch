@@ -279,6 +279,12 @@ public abstract class Engine implements Closeable {
     }
 
     /**
+     * @userAdd
+     * @param seqNo
+     */
+    public void markSeqNoAsCompleted(long seqNo) {}
+
+    /**
      * A throttling class that can be activated, causing the
      * {@code acquireThrottle} method to block on a lock when throttling
      * is enabled
@@ -1642,7 +1648,7 @@ public abstract class Engine implements Closeable {
             this.ifPrimaryTerm = primaryTerm;
             return this;
         }
-        
+
         public long getIfPrimaryTerm() {
             return ifPrimaryTerm;
         }

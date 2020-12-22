@@ -41,6 +41,7 @@ public class RecoveryTranslogOperationsRequest extends TransportRequest {
     private long maxSeenAutoIdTimestampOnPrimary;
     private long maxSeqNoOfUpdatesOrDeletesOnPrimary;
     private RetentionLeases retentionLeases;
+    private long globalCheckpoint;
 
     public RecoveryTranslogOperationsRequest() {
     }
@@ -48,6 +49,7 @@ public class RecoveryTranslogOperationsRequest extends TransportRequest {
     RecoveryTranslogOperationsRequest(
             final long recoveryId,
             final ShardId shardId,
+            final long globalCheckpoint,
             final List<Translog.Operation> operations,
             final int totalTranslogOps,
             final long maxSeenAutoIdTimestampOnPrimary,
@@ -55,6 +57,7 @@ public class RecoveryTranslogOperationsRequest extends TransportRequest {
             final RetentionLeases retentionLeases) {
         this.recoveryId = recoveryId;
         this.shardId = shardId;
+        this.globalCheckpoint = globalCheckpoint;
         this.operations = operations;
         this.totalTranslogOps = totalTranslogOps;
         this.maxSeenAutoIdTimestampOnPrimary = maxSeenAutoIdTimestampOnPrimary;
@@ -88,6 +91,10 @@ public class RecoveryTranslogOperationsRequest extends TransportRequest {
 
     public RetentionLeases retentionLeases() {
         return retentionLeases;
+    }
+
+    public long globalCheckpoint() {
+        return globalCheckpoint;
     }
 
     @Override

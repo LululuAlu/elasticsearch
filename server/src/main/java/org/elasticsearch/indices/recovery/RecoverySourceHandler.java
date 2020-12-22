@@ -161,6 +161,7 @@ public class RecoverySourceHandler {
             final boolean isSequenceNumberBasedRecovery = request.startingSeqNo() != SequenceNumbers.UNASSIGNED_SEQ_NO &&
                 isTargetSameHistory() && shard.hasCompleteHistoryOperations("peer-recovery", request.startingSeqNo());
             final SendFileResult sendFileResult;
+            // 比较segment的区别，如果没有区别则跳过 phase1
             if (isSequenceNumberBasedRecovery) {
                 logger.trace("performing sequence numbers based recovery. starting at [{}]", request.startingSeqNo());
                 startingSeqNo = request.startingSeqNo();
@@ -183,6 +184,7 @@ public class RecoverySourceHandler {
                 }
                 try {
                     final int estimateNumOps = shard.estimateNumberOfHistoryOperations("peer-recovery", startingSeqNo);
+                    // 运行阶段1
                     sendFileResult = phase1(phase1Snapshot.getIndexCommit(), () -> estimateNumOps);
                 } catch (final Exception e) {
                     throw new RecoveryEngineException(shard.shardId(), 1, "phase1 failed", e);
@@ -197,6 +199,7 @@ public class RecoverySourceHandler {
             assert startingSeqNo >= 0 : "startingSeqNo must be non negative. got: " + startingSeqNo;
 
             final StepListener<TimeValue> prepareEngineStep = new StepListener<>();
+            //通知副本节点准备恢复的内容
             // For a sequence based recovery, the target can keep its local translog
             prepareTargetForTranslog(isSequenceNumberBasedRecovery == false,
                 shard.estimateNumberOfHistoryOperations("peer-recovery", startingSeqNo), prepareEngineStep);
@@ -216,6 +219,7 @@ public class RecoverySourceHandler {
                     logger.trace("snapshot translog for recovery; current size is [{}]",
                         shard.estimateNumberOfHistoryOperations("peer-recovery", startingSeqNo));
                 }
+                // 根据开始的 seqNo(由target节点提供) 开始生成 从lucene / translog 生成快照 snapshot
                 final Translog.Snapshot phase2Snapshot = shard.getHistoryOperations("peer-recovery", startingSeqNo);
                 resources.add(phase2Snapshot);
                 // we can release the retention lock here because the snapshot itself will retain the required operations.
@@ -237,6 +241,7 @@ public class RecoverySourceHandler {
             }, onFailure);
 
             final StepListener<Void> finalizeStep = new StepListener<>();
+            //完成恢复，通知所有副本修改 RecoveryState = FINALIZE
             sendSnapshotStep.whenComplete(r -> finalizeRecovery(r.targetLocalCheckpoint, finalizeStep), onFailure);
 
             finalizeStep.whenComplete(r -> {
@@ -337,6 +342,8 @@ public class RecoverySourceHandler {
      * Phase1 examines the segment files on the target node and copies over the
      * segments that are missing. Only segments that have the same size and
      * checksum can be reused
+     * 比较副本（需要恢复的节点:称为target）segment文件是否完整，并复制丢失部分。
+     * 只有具有相同大小和校验通过和的段才能被重用
      */
     public SendFileResult phase1(final IndexCommit snapshot, final Supplier<Integer> translogOps) {
         cancellableThreads.checkForCancel();
@@ -374,6 +381,7 @@ public class RecoverySourceHandler {
             String recoveryTargetSyncId = request.metadataSnapshot().getSyncId();
             final boolean recoverWithSyncId = recoverySourceSyncId != null &&
                     recoverySourceSyncId.equals(recoveryTargetSyncId);
+            //首先比较syncId，SyncId一致，说明两边一致，无需同步，直接返回
             if (recoverWithSyncId) {
                 final long numDocsTarget = request.metadataSnapshot().getNumDocs();
                 final long numDocsSource = recoverySourceMetadata.getNumDocs();
@@ -386,6 +394,8 @@ public class RecoverySourceHandler {
                 // so we don't return here
                 logger.trace("skipping [phase1]- identical sync id [{}] found on both source and target", recoverySourceSyncId);
             } else {
+                //不一致，则进行细节比较，比较的粒度是Segment，只有当segment大小，checksums完全一致才算一致。该方法返回3个列表，
+                // 包括：identical，different，missing
                 final Store.RecoveryDiff diff = recoverySourceMetadata.recoveryDiff(request.metadataSnapshot());
                 for (StoreFileMetaData md : diff.identical) {
                     phase1ExistingFileNames.add(md.name());
@@ -415,8 +425,10 @@ public class RecoverySourceHandler {
                 logger.trace("recovery [phase1]: recovering_files [{}] with total_size [{}], reusing_files [{}] with total_size [{}]",
                     phase1FileNames.size(), new ByteSizeValue(totalSize),
                     phase1ExistingFileNames.size(), new ByteSizeValue(existingTotalSize));
+                //比较完成后，则给target发送receiveFileInfo消息，然后开始sendFiles
                 cancellableThreads.execute(() -> recoveryTarget.receiveFileInfo(
                     phase1FileNames, phase1FileSizes, phase1ExistingFileNames, phase1ExistingFileSizes, translogOps.get()));
+                //将比较结果及差异文件发送给target,indices.recovery.max_bytes_per_sec 参数在该方法生效
                 sendFiles(store, phase1Files.toArray(new StoreFileMetaData[0]), translogOps);
                 // Send the CLEAN_FILES request, which takes all of the files that
                 // were transferred and renames them from their temporary file
@@ -478,6 +490,12 @@ public class RecoverySourceHandler {
         }
     }
 
+    /*
+     * 通知副本节点准备恢复的内容
+     * @param fileBasedRecovery
+     * @param totalTranslogOps 一共有几个translog 操作
+     * @param listener
+     */
     void prepareTargetForTranslog(boolean fileBasedRecovery, int totalTranslogOps, ActionListener<TimeValue> listener) {
         StopWatch stopWatch = new StopWatch().start();
         final ActionListener<Void> wrappedListener = ActionListener.wrap(
@@ -501,6 +519,8 @@ public class RecoverySourceHandler {
      * Phase two uses a snapshot of the current translog *without* acquiring the write lock (however, the translog snapshot is
      * point-in-time view of the translog). It then sends each translog operation to the target node so it can be replayed into the new
      * shard.
+     *
+     * 执行恢复过程的第二阶段。第二阶段使用当前日志的快照（translog 或者 Lucene数据） 然后，它将每个translog操作发送给目标节点，以便它可以在新的分片中重播。
      *
      * @param startingSeqNo              the sequence number to start recovery from, or {@link SequenceNumbers#UNASSIGNED_SEQ_NO} if all
      *                                   ops should be sent
@@ -571,10 +591,12 @@ public class RecoverySourceHandler {
             listener::onFailure
         );
 
+
         sendBatch(
                 readNextBatch,
                 true,
                 SequenceNumbers.UNASSIGNED_SEQ_NO,
+                shard.getGlobalCheckpoint(),
                 snapshot.totalOperations(),
                 maxSeenAutoIdTimestamp,
                 maxSeqNoOfUpdatesOrDeletes,
@@ -582,10 +604,23 @@ public class RecoverySourceHandler {
                 batchedListener);
     }
 
+    /**
+     * 第二阶段，发送需要重播的操作
+     * @param nextBatch 需要回放的operator
+     * @param firstBatch
+     * @param targetLocalCheckpoint
+     * @param totalTranslogOps 总的操作数量
+     * @param maxSeenAutoIdTimestamp
+     * @param maxSeqNoOfUpdatesOrDeletes
+     * @param retentionLeases
+     * @param listener
+     * @throws IOException
+     */
     private void sendBatch(
             final CheckedSupplier<List<Translog.Operation>, IOException> nextBatch,
             final boolean firstBatch,
             final long targetLocalCheckpoint,
+            final long globalCheckpoint,
             final int totalTranslogOps,
             final long maxSeenAutoIdTimestamp,
             final long maxSeqNoOfUpdatesOrDeletes,
@@ -598,15 +633,17 @@ public class RecoverySourceHandler {
                 recoveryTarget.indexTranslogOperations(
                         operations,
                         totalTranslogOps,
+                        globalCheckpoint,
                         maxSeenAutoIdTimestamp,
                         maxSeqNoOfUpdatesOrDeletes,
                         retentionLeases,
-                        ActionListener.wrap(
+                        ActionListener.wrap( // 发送两次 第一次localCheckpoint -1，第二次是 new checkpoint
                                 newCheckpoint -> {
                                     sendBatch(
                                             nextBatch,
                                             false,
                                             SequenceNumbers.max(targetLocalCheckpoint, newCheckpoint),
+                                            globalCheckpoint,
                                             totalTranslogOps,
                                             maxSeenAutoIdTimestamp,
                                             maxSeqNoOfUpdatesOrDeletes,
@@ -620,7 +657,7 @@ public class RecoverySourceHandler {
             listener.onResponse(targetLocalCheckpoint);
         }
     }
-
+    // 完成恢复，通知所有副本修改 RecoveryState = FINALIZE
     void finalizeRecovery(final long targetLocalCheckpoint, final ActionListener<Void> listener) throws IOException {
         if (shard.state() == IndexShardState.CLOSED) {
             throw new IndexShardClosedException(request.shardId());
@@ -634,10 +671,12 @@ public class RecoverySourceHandler {
          * marking the shard as in-sync. If the relocation handoff holds all the permits then after the handoff completes and we acquire
          * the permit then the state of the shard will be relocated and this recovery will fail.
          */
+        // 当前线程让出cpu等待 shard sync
         runUnderPrimaryPermit(() -> shard.markAllocationIdAsInSync(request.targetAllocationId(), targetLocalCheckpoint),
             shardId + " marking " + request.targetAllocationId() + " as in sync", shard, cancellableThreads, logger);
         final long globalCheckpoint = shard.getGlobalCheckpoint();
         final StepListener<Void> finalizeListener = new StepListener<>();
+        // 通知分片修改恢复状态
         cancellableThreads.executeIO(() -> recoveryTarget.finalizeRecovery(globalCheckpoint, finalizeListener));
         finalizeListener.whenComplete(r -> {
             runUnderPrimaryPermit(() -> shard.updateGlobalCheckpointForShard(request.targetAllocationId(), globalCheckpoint),

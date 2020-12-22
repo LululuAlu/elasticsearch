@@ -101,6 +101,7 @@ public class ReplicationOperation<
 
         totalShards.incrementAndGet();
         pendingActions.incrementAndGet(); // increase by 1 until we finish all primary coordination
+        // 开始写主分片
         primaryResult = primary.perform(request);
         primary.updateLocalCheckpointForShard(primaryRouting.allocationId().getId(), primary.localCheckpoint());
         final ReplicaRequest replicaRequest = primaryResult.replicaRequest();
@@ -123,6 +124,7 @@ public class ReplicationOperation<
             assert maxSeqNoOfUpdatesOrDeletes != SequenceNumbers.UNASSIGNED_SEQ_NO : "seqno_of_updates still uninitialized";
             final ReplicationGroup replicationGroup = primary.getReplicationGroup();
             markUnavailableShardsAsStale(replicaRequest, replicationGroup);
+            //关键步骤，写完primary后这里转发请求到replicas
             performOnReplicas(replicaRequest, globalCheckpoint, maxSeqNoOfUpdatesOrDeletes, replicationGroup);
         }
 

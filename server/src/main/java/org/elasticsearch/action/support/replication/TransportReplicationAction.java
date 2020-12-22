@@ -382,7 +382,7 @@ public abstract class TransportReplicationAction<
                     logger.trace("cluster is blocked, action failed on primary", blockException);
                     throw blockException;
                 }
-
+                // 检查副本是否迁移
                 if (primaryShardReference.isRelocated()) {
                     primaryShardReference.close(); // release shard operation lock as soon as possible
                     setPhase(replicationTask, "primary_delegation");
@@ -1157,6 +1157,9 @@ public abstract class TransportReplicationAction<
             this.primaryTerm = primaryTerm;
         }
 
+        /*
+         发送 请求给副本分片用于同步操作（index delete）
+         */
         @Override
         public void performOn(
                 final ShardRouting replica,

@@ -106,10 +106,11 @@ import java.util.zip.Checksum;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableMap;
 
-/**
+/** 提供基础的访问 lucene 目录文件的访问
  * A Store provides plain access to files written by an elasticsearch index shard. Each shard
  * has a dedicated store that is uses to access Lucene's Directory which represents the lowest level
  * of file abstraction in Lucene used to read and write Lucene indices.
+ * 还提供对元数据的访问，
  * This class also provides access to metadata information like checksums for committed files. A committed
  * file is a file that belongs to a segment written by a Lucene commit. Files that have not been committed
  * ie. created during a merge or a shard refresh / NRT reopen are not considered in the MetadataSnapshot.
@@ -745,6 +746,7 @@ public class Store extends AbstractIndexShardComponent implements Closeable, Ref
     }
 
     /**
+     * lucene 最新一次提交的 commit 快照
      * Represents a snapshot of the current directory build from the latest Lucene commit.
      * Only files that are part of the last commit are considered in this datastructure.
      * For backwards compatibility the snapshot might include legacy checksums that
@@ -756,12 +758,16 @@ public class Store extends AbstractIndexShardComponent implements Closeable, Ref
      * @see StoreFileMetaData
      */
     public static final class MetadataSnapshot implements Iterable<StoreFileMetaData>, Writeable {
+        // cfe,si,cfs,segment文件
         private final Map<String, StoreFileMetaData> metadata;
 
         public static final MetadataSnapshot EMPTY = new MetadataSnapshot();
-
+        // local_checkpoint,
+        // max_unsafe_auto_id_timestamp,
+        // translog_uuid,history_uuid,sync_id,
+        // translog_generation,max_seq_no
         private final Map<String, String> commitUserData;
-
+        // shard 文档数量
         private final long numDocs;
 
         public MetadataSnapshot(Map<String, StoreFileMetaData> metadata, Map<String, String> commitUserData, long numDocs) {
